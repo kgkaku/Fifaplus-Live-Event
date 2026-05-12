@@ -2,12 +2,13 @@ name: FIFA+ Live Stream Fetcher
 
 on:
   schedule:
-    - cron: '30 */2 * * *'  # প্রতি 2 ঘন্টায় 30 মিনিটে (রেট লিমিট এড়াতে)
+    - cron: '30 */2 * * *'
   workflow_dispatch:
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
     - name: Checkout repository
@@ -18,8 +19,10 @@ jobs:
       with:
         python-version: '3.10'
     
-    - name: Install dependencies
+    - name: Install curl and dependencies
       run: |
+        sudo apt-get update
+        sudo apt-get install -y curl
         pip install --upgrade pip
         pip install requests pywidevine==1.8.0
     
