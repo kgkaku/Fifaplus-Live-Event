@@ -16,7 +16,7 @@ from pywidevine.pssh import PSSH
 # ========== কনফিগারেশন ==========
 CDM_REPO = "kgkaku/Widevine-CDM-L3"  # আপনার প্রাইভেট রেপোর নাম
 CDM_BRANCH = "main"
-GITHUB_TOKEN = os.environ.get("CDM_REPO_TOKEN")  # GitHub Secret থেকে নিবে
+GITHUB_TOKEN = os.environ.get("PAT_TOKEN_CDM")  # GitHub Secret থেকে নিবে
 
 if not GITHUB_TOKEN:
     raise Exception("❌ CDM_REPO_TOKEN secret not found! Add it to GitHub Actions secrets.")
@@ -25,7 +25,7 @@ if not GITHUB_TOKEN:
 BASE_URL = "https://android.plus.fifa.com"
 DEVICE_PROFILE = "MOBILE"
 DEVICE_STORE = "GOOGLE_PLAY"
-USER_COUNTRY = "BD"
+USER_COUNTRY = "PK"
 APP_VERSION = "8.6.12"
 
 # ========== ১. প্রাইভেট রেপো থেকে CDM ফোল্ডার লিস্ট আনা ==========
