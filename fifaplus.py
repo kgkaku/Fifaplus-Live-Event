@@ -137,6 +137,7 @@ def create_streaming_session(device_token, video_asset_id):
     """স্ট্রিমিং সেশন তৈরি - exact captured headers format"""
     url = f"{BASE_URL}/flux-capacitor/api/v1/streaming/session"
     
+    # আপনার ক্যাপচার করা হেডারস - হুবহু
     headers = {
         "x-chili-avod-compatibility": "free,free-ads",
         "x-chili-streaming-proto": "https",
@@ -161,7 +162,16 @@ def create_streaming_session(device_token, video_asset_id):
     
     payload = {"autoPlay": False, "videoAssetId": video_asset_id}
     
+    # ডিবাগ: হেডারস প্রিন্ট করুন
+    print(f"🔑 Sending session request for: {video_asset_id}")
+    
     resp = requests.post(url, json=payload, headers=headers)
+    
+    # ডিবাগ: রেসপন্স স্ট্যাটাস ও বডি
+    print(f"📡 Session Response Status: {resp.status_code}")
+    if resp.status_code != 201:
+        print(f"❌ Response Body: {resp.text}")
+    
     resp.raise_for_status()
     session_data = resp.json()
     print(f"✅ Session created: {session_data['id'][:40]}...")
@@ -288,7 +298,7 @@ def main():
     print("\n🎬 Step 4: Processing events...")
     results = []
     
-    # সব ইভেন্ট প্রসেস করতে চাইলে range(len(events)) ইউজ করুন
+    # সব ইভেন্ট প্রসেস করতে চাইলে events ব্যবহার করুন
     for idx, event in enumerate(events[:5], 1):
         print(f"\n--- [{idx}/{min(5, len(events))}] ---")
         title = event.get("title", "Unknown")[:60]
