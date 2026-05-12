@@ -8,7 +8,6 @@ import json
 import random
 import requests
 import xml.etree.ElementTree as ET
-import base64
 from pywidevine.device import Device
 from pywidevine.cdm import Cdm
 from pywidevine.pssh import PSSH
@@ -25,7 +24,7 @@ if not GITHUB_TOKEN:
 BASE_URL = "https://android.plus.fifa.com"
 DEVICE_PROFILE = "MOBILE"
 DEVICE_STORE = "GOOGLE_PLAY"
-USER_COUNTRY = "PK"
+USER_COUNTRY = "BD"
 APP_VERSION = "8.6.12"
 
 # ========== ১. প্রাইভেট রেপো থেকে CDM ফোল্ডার লিস্ট আনা ==========
@@ -66,24 +65,31 @@ def load_random_cdm():
     download_cdm_file(selected, "client_id.bin", "client_id.bin")
     download_cdm_file(selected, "private_key.pem", "private_key.pem")
     
-    # পুরনো স্টাইল (pywidevine 1.8.0)
-    # device = Device.load("client_id.bin", "private_key.pem")
+    # সঠিক পদ্ধতি (সব pywidevine ভার্সনে কাজ করবে)
+    with open("client_id.bin", "rb") as f:
+        client_id = f.read()
+    with open("private_key.pem", "rb") as f:
+        private_key = f.read()
     
-    # নতুন স্টাইল (pywidevine 1.9.0)
-    device = Device.loads("client_id.bin", "private_key.pem")
-    return device
+    return Device(client_id=client_id, private_key=private_key)
 
 # ========== ৪. ডিভাইস রেজিস্ট্রেশন (FIFA API) ==========
 def register_device():
     """FIFA+ এ ডিভাইস রেজিস্ট্রেশন করে ডিভাইস টোকেন নেয়া"""
     url = f"{BASE_URL}/api/v2/devices"
     payload = {
-        "appVersion": APP_VERSION, "architecture": "aarch64",
-        "profile": DEVICE_PROFILE, "store": DEVICE_STORE,
-        "manufacturer": "google", "model": "Pixel 4",
-        "osName": "Android", "osVersion": "28",
-        "platform": BASE_URL, "platformVersion": "28",
-        "screenHeight": 1504, "screenWidth": 720
+        "appVersion": APP_VERSION,
+        "architecture": "aarch64",
+        "profile": DEVICE_PROFILE,
+        "store": DEVICE_STORE,
+        "manufacturer": "google",
+        "model": "Pixel 4",
+        "osName": "Android",
+        "osVersion": "28",
+        "platform": BASE_URL,
+        "platformVersion": "28",
+        "screenHeight": 1504,
+        "screenWidth": 720
     }
     resp = requests.post(url, json=payload)
     resp.raise_for_status()
@@ -91,6 +97,7 @@ def register_device():
 
 # ========== ৫. লাইভ ইভেন্ট লিস্ট আনা ==========
 def get_live_events(device_token):
+    """লাইভ ইভেন্টের তালিকা আনে"""
     headers = {
         "x-chili-device-id": device_token,
         "x-chili-device-profile": DEVICE_PROFILE,
@@ -105,6 +112,7 @@ def get_live_events(device_token):
 
 # ========== ৬. স্ট্রিমিং সেশন তৈরি ==========
 def create_streaming_session(device_token, video_asset_id):
+    """স্ট্রিমিং সেশন তৈরি করে session id রিটার্ন করে"""
     headers = {
         "x-chili-device-id": device_token,
         "Content-Type": "application/json"
@@ -117,6 +125,7 @@ def create_streaming_session(device_token, video_asset_id):
 
 # ========== ৭. MPD URL আনা ==========
 def get_mpd_url(device_token, session_id):
+    """সেশন আইডি ব্যবহার করে MPD URL আনে"""
     headers = {
         "x-chili-device-id": device_token,
         "x-chili-streaming-session": session_id
@@ -129,6 +138,7 @@ def get_mpd_url(device_token, session_id):
 
 # ========== ৮. MPD থেকে PSSH ও KID বের করা ==========
 def extract_pssh_and_kid(mpd_url):
+    """MPD ডাউনলোড করে PSSH ও KID বের করে"""
     resp = requests.get(mpd_url)
     resp.raise_for_status()
     root = ET.fromstring(resp.content)
@@ -180,21 +190,33 @@ def main():
     print("🚀 FIFA+ Scraper starting...")
     
     # লোড CDM
-    device = load_random_cdm()
-    print("✅ CDM loaded successfully")
+    try:
+        device = load_random_cdm()
+        print("✅ CDM loaded successfully")
+    except Exception as e:
+        print(f"❌ Failed to load CDM: {e}")
+        return
     
     # FIFA API শুরু
-    device_token = register_device()
-    print("✅ Device token obtained")
+    try:
+        device_token = register_device()
+        print("✅ Device token obtained")
+    except Exception as e:
+        print(f"❌ Failed to register device: {e}")
+        return
     
-    events = get_live_events(device_token)
-    print(f"📡 Found {len(events)} events")
+    try:
+        events = get_live_events(device_token)
+        print(f"📡 Found {len(events)} events")
+    except Exception as e:
+        print(f"❌ Failed to get events: {e}")
+        return
     
     results = []
-    for event in events[:5]:  # প্রথম 5টি ইভেন্ট টেস্ট
+    for event in events[:5]:  # প্রথম 5টি ইভেন্ট টেস্ট (প্রোডাকশনে 5 সরিয়ে দিন)
         try:
             title = event.get("title", "Unknown")
-            print(f"🔄 Processing: {title[:50]}...")
+            print(f"🔄 Processing: {title[:60]}...")
             
             session_id = create_streaming_session(device_token, event["id"])
             mpd_url = get_mpd_url(device_token, session_id)
@@ -220,7 +242,7 @@ def main():
             results.append(event_data)
             
             if clearkey:
-                print(f"✅ Got key: {clearkey[:20]}...")
+                print(f"✅ Got key: {clearkey[:30]}...")
             else:
                 print("⚠️ No key retrieved")
                 
@@ -228,14 +250,23 @@ def main():
             print(f"❌ Failed: {e}")
     
     # JSON আউটপুট
-    with open("fifaplus.json", "w") as f:
-        json.dump(results, f, indent=2)
+    output_data = {
+        "metadata": {
+            "name": "Fifa Plus Live Events",
+            "last_update_time": __import__('datetime').datetime.now().strftime("%I:%M:%S %p %d-%m-%Y"),
+            "total_live": len(results)
+        },
+        "matches": results
+    }
+    
+    with open("fifaplus.json", "w", encoding="utf-8") as f:
+        json.dump(output_data, f, indent=2, ensure_ascii=False)
     print("💾 Saved fifaplus.json")
     
     # M3U আউটপুট
-    with open("fifaplus.m3u", "w") as f:
+    with open("fifaplus.m3u", "w", encoding="utf-8") as f:
         f.write("#EXTM3U\n")
-        f.write("# FIFA+ Live Streams\n\n")
+        f.write(f"# FIFA+ Live Streams (Updated: {__import__('datetime').datetime.now().strftime('%I:%M:%S %p %d-%m-%Y')})\n\n")
         for item in results:
             if item["decryption_keys"]:
                 key = item["decryption_keys"][0]
