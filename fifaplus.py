@@ -1,25 +1,19 @@
 #!/usr/bin/env python3
 """
-FIFA+ Live Stream Fetcher - Complete Working Version
-Based on captured API requests from 12 May 2026
+FIFA+ Live Stream Fetcher - Working GitHub Action Version
+Using curl subprocess for reliable API calls
 """
 
 import os
 import json
-import random
-import requests
-import xml.etree.ElementTree as ET
+import subprocess
 from datetime import datetime
-from pywidevine.device import Device
-from pywidevine.cdm import Cdm
-from pywidevine.pssh import PSSH
 
 # ========== CONFIGURATION ==========
 BASE_URL = "https://android.plus.fifa.com"
 DEVICE_PROFILE = "MOBILE"
 DEVICE_STORE = "GOOGLE_PLAY"
 USER_COUNTRY = "BD"
-APP_VERSION = "8.6.12"
 
 # GitHub Secret থেকে Token নিবে
 GITHUB_TOKEN = os.environ.get("PAT_TOKEN_CDM")
@@ -30,28 +24,29 @@ if not GITHUB_TOKEN:
 def get_cdm_folders():
     """GitHub API ব্যবহার করে সব CDM ফোল্ডারের নাম বের করা"""
     url = "https://api.github.com/repos/kgkaku/Widevine-CDM-L3/contents/"
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
+    cmd = ["curl", "-s", "-H", f"Authorization: token {GITHUB_TOKEN}", url]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        raise Exception("Failed to fetch CDM folders")
     
     folders = []
-    for item in resp.json():
-        if item["type"] == "dir":
+    for item in json.loads(result.stdout):
+        if item.get("type") == "dir":
             folders.append(item["name"])
     return folders
 
 def download_cdm_file(folder, filename, output_path):
     """প্রাইভেট রেপো থেকে CDM ফাইল ডাউনলোড"""
     url = f"https://raw.githubusercontent.com/kgkaku/Widevine-CDM-L3/main/{folder}/{filename}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
+    cmd = ["curl", "-s", "-H", f"Authorization: token {GITHUB_TOKEN}", url]
+    result = subprocess.run(cmd, capture_output=True)
+    
+    if result.returncode != 0:
+        raise Exception(f"Failed to download {filename}")
     
     with open(output_path, "wb") as f:
-        f.write(resp.content)
+        f.write(result.stdout)
 
 def load_random_cdm():
     """সব CDM থেকে র‍্যান্ডম একটি বেছে নিয়ে ডাউনলোড করে Device লোড করে"""
@@ -59,18 +54,20 @@ def load_random_cdm():
     if not folders:
         raise Exception("❌ কোনো CDM ফোল্ডার পাওয়া যায়নি!")
     
+    import random
     selected = random.choice(folders)
     print(f"🔄 নির্বাচিত CDM: {selected}")
     
     download_cdm_file(selected, "client_id.bin", "client_id.bin")
     download_cdm_file(selected, "private_key.pem", "private_key.pem")
     
+    from pywidevine.device import Device
+    
     with open("client_id.bin", "rb") as f:
         client_id = f.read()
     with open("private_key.pem", "rb") as f:
         private_key = f.read()
     
-    # pywidevine 1.8.0-এর জন্য সঠিক সিনট্যাক্স
     return Device(
         client_id=client_id,
         private_key=private_key,
@@ -79,23 +76,13 @@ def load_random_cdm():
         flags={}
     )
 
-# ========== FIFA+ API FUNCTIONS ==========
+# ========== FIFA+ API FUNCTIONS USING CURL ==========
 def register_device():
-    """ডিভাইস রেজিস্ট্রেশন - exact captured format"""
+    """ডিভাইস রেজিস্ট্রেশন - curl ব্যবহার করে"""
     url = f"{BASE_URL}/api/v2/devices"
-    headers = {
-        "x-chili-api-version": "1.0",
-        "x-chili-app-version": "8.6.12+8818",
-        "accept-language": "en , en; q=0.8",
-        "x-chili-authenticated": "false",
-        "x-chili-device-profile": DEVICE_PROFILE,
-        "x-chili-device-store": DEVICE_STORE,
-        "x-chili-user-country": USER_COUNTRY,
-        "content-type": "application/json; charset=UTF-8",
-        "user-agent": "okhttp/4.12.0"
-    }
+    
     payload = {
-        "appVersion": APP_VERSION,
+        "appVersion": "8.6.12",
         "architecture": "aarch64",
         "profile": DEVICE_PROFILE,
         "store": DEVICE_STORE,
@@ -108,93 +95,110 @@ def register_device():
         "screenHeight": 1504,
         "screenWidth": 720
     }
-    resp = requests.post(url, json=payload, headers=headers)
-    resp.raise_for_status()
-    data = resp.json()
+    
+    cmd = [
+        "curl", "-s", "-X", "POST", url,
+        "-H", "x-chili-api-version: 1.0",
+        "-H", "x-chili-app-version: 8.6.12+8818",
+        "-H", "accept-language: en , en; q=0.8",
+        "-H", "x-chili-authenticated: false",
+        "-H", f"x-chili-device-profile: {DEVICE_PROFILE}",
+        "-H", f"x-chili-device-store: {DEVICE_STORE}",
+        "-H", f"x-chili-user-country: {USER_COUNTRY}",
+        "-H", "content-type: application/json; charset=UTF-8",
+        "-H", "user-agent: okhttp/4.12.0",
+        "-d", json.dumps(payload)
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        raise Exception("Failed to register device")
+    
+    data = json.loads(result.stdout)
     print(f"✅ Device registered: {data['device_id']}")
     return data["device_token"]
 
 def get_live_events(device_token):
-    """লাইভ ইভেন্টের তালিকা আনে"""
+    """লাইভ ইভেন্টের তালিকা আনে - curl ব্যবহার করে"""
     url = f"{BASE_URL}/entertainment/api/v1/showcases/12959509-fd03-47a5-8f0d-53708908881b/child?limit=30"
-    headers = {
-        "x-chili-device-id": device_token,
-        "x-chili-device-profile": DEVICE_PROFILE,
-        "x-chili-device-store": DEVICE_STORE,
-        "x-chili-user-country": USER_COUNTRY,
-        "accept-language": "en , en; q=0.8",
-        "user-agent": "okhttp/4.12.0",
-        "x-chili-api-version": "1.0",
-        "x-chili-app-version": "8.6.12+8818"
-    }
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    events = resp.json()
+    
+    cmd = [
+        "curl", "-s", url,
+        "-H", f"x-chili-device-id: {device_token}",
+        "-H", f"x-chili-device-profile: {DEVICE_PROFILE}",
+        "-H", f"x-chili-device-store: {DEVICE_STORE}",
+        "-H", f"x-chili-user-country: {USER_COUNTRY}",
+        "-H", "accept-language: en , en; q=0.8",
+        "-H", "user-agent: okhttp/4.12.0"
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        raise Exception("Failed to fetch events")
+    
+    events = json.loads(result.stdout)
     print(f"📡 Found {len(events)} live events")
     return events
 
 def create_streaming_session(device_token, video_asset_id):
-    """স্ট্রিমিং সেশন তৈরি - exact captured headers format"""
+    """স্ট্রিমিং সেশন তৈরি - curl ব্যবহার করে"""
     url = f"{BASE_URL}/flux-capacitor/api/v1/streaming/session"
-    
-    # আপনার ক্যাপচার করা হেডারস - হুবহু
-    headers = {
-        "x-chili-avod-compatibility": "free,free-ads",
-        "x-chili-streaming-proto": "https",
-        "x-chili-accept-subtitle": "text/vtt;q=0.9",
-        "x-chili-streaming-capability": "true",
-        "x-chili-accept-stream-mode": "multi/codec-compatibility;q=0.8, mono/strict;q=0.7",
-        "x-chili-accept-stream": "mpd/cenc+h264;q=0.4, mpd/clear+h264;q=0.2, mpd/cenc;q=0.3",
-        "x-chili-max-width": "1600",
-        "x-chili-max-height": "720",
-        "x-chili-manifest-properties": "subtitles",
-        "x-chili-api-version": "1.0",
-        "x-chili-app-version": "8.6.12+8818",
-        "x-chili-device-id": device_token,
-        "accept-language": "en , en; q=0.8",
-        "x-chili-authenticated": "false",
-        "x-chili-device-profile": DEVICE_PROFILE,
-        "x-chili-device-store": DEVICE_STORE,
-        "x-chili-user-country": USER_COUNTRY,
-        "content-type": "application/json; charset=UTF-8",
-        "user-agent": "okhttp/4.12.0"
-    }
     
     payload = {"autoPlay": False, "videoAssetId": video_asset_id}
     
-    # ডিবাগ: হেডারস প্রিন্ট করুন
-    print(f"🔑 Sending session request for: {video_asset_id}")
+    cmd = [
+        "curl", "-s", "-X", "POST", url,
+        "-H", f"x-chili-device-id: {device_token}",
+        "-H", "x-chili-avod-compatibility: free,free-ads",
+        "-H", "x-chili-streaming-proto: https",
+        "-H", "x-chili-accept-subtitle: text/vtt;q=0.9",
+        "-H", "x-chili-streaming-capability: true",
+        "-H", "x-chili-accept-stream-mode: multi/codec-compatibility;q=0.8, mono/strict;q=0.7",
+        "-H", "x-chili-accept-stream: mpd/cenc+h264;q=0.4, mpd/clear+h264;q=0.2, mpd/cenc;q=0.3",
+        "-H", "x-chili-max-width: 1600",
+        "-H", "x-chili-max-height: 720",
+        "-H", "x-chili-manifest-properties: subtitles",
+        "-H", "content-type: application/json",
+        "-H", "user-agent: okhttp/4.12.0",
+        "-d", json.dumps(payload)
+    ]
     
-    resp = requests.post(url, json=payload, headers=headers)
+    result = subprocess.run(cmd, capture_output=True, text=True)
     
-    # ডিবাগ: রেসপন্স স্ট্যাটাস ও বডি
-    print(f"📡 Session Response Status: {resp.status_code}")
-    if resp.status_code != 201:
-        print(f"❌ Response Body: {resp.text}")
+    print(f"📡 Session Response Status: {result.returncode}")
     
-    resp.raise_for_status()
-    session_data = resp.json()
-    print(f"✅ Session created: {session_data['id'][:40]}...")
-    return session_data["id"]
+    if result.returncode != 0:
+        print(f"❌ Response: {result.stdout}")
+        raise Exception("Session creation failed")
+    
+    data = json.loads(result.stdout)
+    print(f"✅ Session created: {data['id'][:40]}...")
+    return data["id"]
 
 def get_mpd_urls(device_token, session_id):
-    """সেশন আইডি ব্যবহার করে MPD URLs আনে"""
+    """সেশন আইডি ব্যবহার করে MPD URLs আনে - curl ব্যবহার করে"""
     url = f"{BASE_URL}/flux-capacitor/api/v1/streaming/urls"
-    headers = {
-        "x-chili-streaming-session": session_id,
-        "x-chili-device-id": device_token,
-        "x-chili-api-version": "1.0",
-        "x-chili-app-version": "8.6.12+8818",
-        "user-agent": "okhttp/4.12.0"
-    }
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    streams = resp.json()
+    
+    cmd = [
+        "curl", "-s", url,
+        "-H", f"x-chili-device-id: {device_token}",
+        "-H", f"x-chili-streaming-session: {session_id}",
+        "-H", "x-chili-api-version: 1.0",
+        "-H", "user-agent: okhttp/4.12.0"
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        return None, None
+    
+    streams = json.loads(result.stdout)
     
     if not streams:
         return None, None
     
-    # HD এবং SD quality সেপারেট
     hd_url = None
     sd_url = None
     for stream in streams:
@@ -207,10 +211,16 @@ def get_mpd_urls(device_token, session_id):
 
 def extract_pssh_and_kid(mpd_url):
     """MPD ডাউনলোড করে PSSH ও KID বের করে"""
+    import xml.etree.ElementTree as ET
+    
     try:
-        resp = requests.get(mpd_url, timeout=15)
-        resp.raise_for_status()
-        root = ET.fromstring(resp.content)
+        cmd = ["curl", "-s", mpd_url]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            return None, None
+        
+        root = ET.fromstring(result.stdout)
         
         pssh = None
         kid = None
@@ -234,13 +244,24 @@ def extract_pssh_and_kid(mpd_url):
 
 def get_clearkey(device, pssh_b64, license_url):
     """CDM ব্যবহার করে লাইসেন্স সার্ভার থেকে ClearKey বের করা"""
+    from pywidevine.pssh import PSSH
+    
     try:
         pssh = PSSH(pssh_b64)
         session_id = device.cdm.open()
         
         challenge = device.cdm.get_license_challenge(session_id, pssh)
-        headers = {"Content-Type": "application/octet-stream"}
-        resp = requests.post(license_url, data=challenge, headers=headers, timeout=15)
+        
+        cmd = [
+            "curl", "-s", "-X", "POST", license_url,
+            "-H", "Content-Type: application/octet-stream",
+            "--data-binary", f"@{challenge}"
+        ]
+        
+        # Note: Challenge data write to temp file needed
+        # For now, using requests for binary data
+        import requests
+        resp = requests.post(license_url, data=challenge, headers={"Content-Type": "application/octet-stream"}, timeout=15)
         
         if resp.status_code != 200:
             print(f"⚠️ License server returned {resp.status_code}")
@@ -298,7 +319,6 @@ def main():
     print("\n🎬 Step 4: Processing events...")
     results = []
     
-    # সব ইভেন্ট প্রসেস করতে চাইলে events ব্যবহার করুন
     for idx, event in enumerate(events[:5], 1):
         print(f"\n--- [{idx}/{min(5, len(events))}] ---")
         title = event.get("title", "Unknown")[:60]
@@ -374,8 +394,7 @@ def main():
     # M3U output (Kodi format)
     with open("fifaplus.m3u", "w", encoding="utf-8") as f:
         f.write("#EXTM3U\n")
-        f.write(f"# FIFA+ Live Streams - Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write("# https://github.com/kgkaku/Fifaplus-Live-Event\n\n")
+        f.write(f"# FIFA+ Live Streams - Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         
         for event in results:
             if event["decryption_keys"]:
