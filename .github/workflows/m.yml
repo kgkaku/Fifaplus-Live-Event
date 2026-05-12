@@ -2,16 +2,15 @@ name: FIFA+ Live Stream Fetcher
 
 on:
   schedule:
-    - cron: '0 * * * *'  # প্রতি ঘন্টায়
-  workflow_dispatch:  # ম্যানুয়াল রানের জন্য
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -25,7 +24,7 @@ jobs:
     
     - name: Run FIFA+ scraper
       env:
-        CDM_REPO_TOKEN: ${{ secrets.CDM_REPO_TOKEN }}
+        PAT_TOKEN_CDM: ${{ secrets.PAT_TOKEN_CDM }}   # ← এটা থাকতে হবে
       run: python fifaplus.py
     
     - name: Upload artifacts
@@ -35,4 +34,3 @@ jobs:
         path: |
           fifaplus.json
           fifaplus.m3u
-        retention-days: 7
