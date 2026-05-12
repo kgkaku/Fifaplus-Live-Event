@@ -19,7 +19,7 @@ CDM_BRANCH = "main"
 GITHUB_TOKEN = os.environ.get("PAT_TOKEN_CDM")  # GitHub Secret থেকে নিবে
 
 if not GITHUB_TOKEN:
-    raise Exception("❌ CDM_REPO_TOKEN secret not found! Add it to GitHub Actions secrets.")
+    raise Exception("❌ PAT_TOKEN_CDM secret not found! Add it to GitHub Actions secrets.")
 
 # FIFA API
 BASE_URL = "https://android.plus.fifa.com"
