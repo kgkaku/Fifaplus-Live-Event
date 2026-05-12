@@ -66,7 +66,11 @@ def load_random_cdm():
     download_cdm_file(selected, "client_id.bin", "client_id.bin")
     download_cdm_file(selected, "private_key.pem", "private_key.pem")
     
-    device = Device.load("client_id.bin", "private_key.pem")
+    # পুরনো স্টাইল (pywidevine 1.8.0)
+    # device = Device.load("client_id.bin", "private_key.pem")
+    
+    # নতুন স্টাইল (pywidevine 1.9.0)
+    device = Device.loads("client_id.bin", "private_key.pem")
     return device
 
 # ========== ৪. ডিভাইস রেজিস্ট্রেশন (FIFA API) ==========
