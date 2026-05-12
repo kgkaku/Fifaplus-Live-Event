@@ -134,33 +134,45 @@ def get_live_events(device_token):
     return events
 
 def create_streaming_session(device_token, video_asset_id):
-    """স্ট্রিমিং সেশন তৈরি করে session id রিটার্ন করে"""
+    """স্ট্রিমিং সেশন তৈরি - exact captured headers format"""
     url = f"{BASE_URL}/flux-capacitor/api/v1/streaming/session"
+    
     headers = {
-        "x-chili-device-id": device_token,
+        "x-chili-avod-compatibility": "free,free-ads",
+        "x-chili-streaming-proto": "https",
+        "x-chili-accept-subtitle": "text/vtt;q=0.9",
+        "x-chili-streaming-capability": "true",
+        "x-chili-accept-stream-mode": "multi/codec-compatibility;q=0.8, mono/strict;q=0.7",
+        "x-chili-accept-stream": "mpd/cenc+h264;q=0.4, mpd/clear+h264;q=0.2, mpd/cenc;q=0.3",
+        "x-chili-max-width": "1600",
+        "x-chili-max-height": "720",
+        "x-chili-manifest-properties": "subtitles",
         "x-chili-api-version": "1.0",
         "x-chili-app-version": "8.6.12+8818",
+        "x-chili-device-id": device_token,
+        "accept-language": "en , en; q=0.8",
+        "x-chili-authenticated": "false",
         "x-chili-device-profile": DEVICE_PROFILE,
         "x-chili-device-store": DEVICE_STORE,
         "x-chili-user-country": USER_COUNTRY,
         "content-type": "application/json; charset=UTF-8",
-        "user-agent": "okhttp/4.12.0",
-        "accept-language": "en , en; q=0.8"
+        "user-agent": "okhttp/4.12.0"
     }
+    
     payload = {"autoPlay": False, "videoAssetId": video_asset_id}
     
     resp = requests.post(url, json=payload, headers=headers)
     resp.raise_for_status()
     session_data = resp.json()
-    print(f"✅ Session created: {session_data['id'][:30]}...")
+    print(f"✅ Session created: {session_data['id'][:40]}...")
     return session_data["id"]
 
 def get_mpd_urls(device_token, session_id):
     """সেশন আইডি ব্যবহার করে MPD URLs আনে"""
     url = f"{BASE_URL}/flux-capacitor/api/v1/streaming/urls"
     headers = {
-        "x-chili-device-id": device_token,
         "x-chili-streaming-session": session_id,
+        "x-chili-device-id": device_token,
         "x-chili-api-version": "1.0",
         "x-chili-app-version": "8.6.12+8818",
         "user-agent": "okhttp/4.12.0"
@@ -276,7 +288,8 @@ def main():
     print("\n🎬 Step 4: Processing events...")
     results = []
     
-    for idx, event in enumerate(events[:5], 1):  # প্রথম 5টি ইভেন্ট প্রসেস করুন (সব চাইলে 5 সরান)
+    # সব ইভেন্ট প্রসেস করতে চাইলে range(len(events)) ইউজ করুন
+    for idx, event in enumerate(events[:5], 1):
         print(f"\n--- [{idx}/{min(5, len(events))}] ---")
         title = event.get("title", "Unknown")[:60]
         print(f"📺 Event: {title}")
