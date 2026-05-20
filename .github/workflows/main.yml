@@ -2,38 +2,26 @@ name: FIFA+ Live Stream Fetcher
 
 on:
   schedule:
-    - cron: '30 */2 * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-    
-    - name: Install dependencies
-      run: |
-        pip install --upgrade pip
-        pip install requests
-    
-    - name: Run FIFA+ fetcher
-      env:
-        FIFA_DEVICE_TOKEN: ${{ secrets.FIFA_DEVICE_TOKEN }}
-      run: python fifaplus.py
-    
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: fifaplus-streams
-        path: |
-          fifaplus.json
-          fifaplus.m3u
-        retention-days: 7
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install yt-dlp
+        run: pip install yt-dlp
+      - name: Run fetcher
+        run: python fifaplus.py
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fifaplus-streams
+          path: |
+            fifaplus.json
+            fifaplus.m3u
