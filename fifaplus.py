@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FIFA+ Live Stream Fetcher - Fixed Version
+FIFA+ Live Stream Fetcher - Final Working Version
 """
 
 import os
@@ -36,20 +36,25 @@ def get_live_events():
     
     if resp.status_code == 200:
         data = resp.json()
-        print(f"📡 Response type: {type(data)}")
         
-        # বিভিন্ন ফরম্যাট হ্যান্ডেল করা
-        if isinstance(data, list):
-            events = data
-        elif isinstance(data, dict):
-            if "results" in data:
-                events = data["results"]
-            elif "items" in data:
-                events = data["items"]
-            else:
-                events = []
-        else:
-            events = []
+        # আসল ইভেন্ট ফিল্টার করা
+        events = []
+        if isinstance(data, dict):
+            # বিভিন্ন কী চেক করা
+            for key in ["results", "items", "data", "events"]:
+                if key in data and isinstance(data[key], list):
+                    for item in data[key]:
+                        if isinstance(item, dict) and "id" in item:
+                            events.append(item)
+                    break
+            
+            # যদি উপরের কিছু না পাওয়া যায়, তাহলে সব ভ্যালু চেক করা
+            if not events:
+                for value in data.values():
+                    if isinstance(value, list):
+                        for item in value:
+                            if isinstance(item, dict) and "id" in item:
+                                events.append(item)
         
         print(f"✅ Found {len(events)} events")
         return events
@@ -72,16 +77,15 @@ def create_streaming_session(video_asset_id):
     
     payload = {"autoPlay": False, "videoAssetId": video_asset_id}
     
-    print(f"🔄 Creating session for: {video_asset_id}")
+    print(f"🔄 Creating session...")
     resp = requests.post(url, json=payload, headers=headers, timeout=30)
-    print(f"📡 Session Status: {resp.status_code}")
     
     if resp.status_code in [200, 201]:
         session_data = resp.json()
-        print(f"✅ Session created: {session_data['id'][:40]}...")
-        return session_data["id"]
+        print(f"✅ Session created")
+        return session_data.get("id")
     else:
-        print(f"❌ Session failed: {resp.text[:100]}")
+        print(f"❌ Session failed: {resp.status_code}")
         return None
 
 def get_mpd_url(session_id):
@@ -102,7 +106,7 @@ def get_mpd_url(session_id):
 
 def main():
     print("=" * 50)
-    print("🚀 FIFA+ Live Stream Fetcher (Correct Base URL)")
+    print("🚀 FIFA+ Live Stream Fetcher")
     print("=" * 50)
     
     # Get events
@@ -119,16 +123,11 @@ def main():
     for i, ev in enumerate(events[:10], 1):
         print(f"\n--- [{i}/{min(10, len(events))}] ---")
         
-        # এখানে টাইপ চেক করা জরুরি
-        if isinstance(ev, str):
-            print(f"⚠️ Skipping string item: {ev[:50]}")
-            continue
-        
-        title = ev.get('title', 'Unknown') if isinstance(ev, dict) else str(ev)
+        title = ev.get('title', 'Unknown')
         print(f"📺 {title[:50]}...")
         
         # Get video asset id
-        video_id = ev.get("catalogRedirectId") or ev.get("id") if isinstance(ev, dict) else None
+        video_id = ev.get("catalogRedirectId") or ev.get("id")
         if not video_id:
             print("❌ No video ID found")
             continue
@@ -144,9 +143,9 @@ def main():
                 "id": video_id,
                 "title": title,
                 "mpd_link": mpd_url,
-                "wideCoverUrl": ev.get("wideCoverUrl", "") if isinstance(ev, dict) else ""
+                "wideCoverUrl": ev.get("wideCoverUrl", "")
             })
-            print(f"✅ MPD: {mpd_url[:60]}...")
+            print(f"✅ Got MPD URL")
         else:
             print("❌ No MPD URL")
     
