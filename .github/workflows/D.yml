@@ -1,0 +1,37 @@
+name: FIFA+ Debug API Response
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install requests
+    
+    - name: Run debug script
+      run: python debug.py
+    
+    - name: Upload debug output
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-output
+        path: |
+          debug_output.txt
+          fifaplus.json
+          fifaplus.m3u
+        retention-days: 1
