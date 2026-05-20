@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FIFA+ Live Stream Fetcher - Working Version with Correct Base URL
+FIFA+ Live Stream Fetcher - Fixed Version
 """
 
 import os
@@ -9,7 +9,7 @@ import requests
 from datetime import datetime
 
 # ========== CONFIGURATION ==========
-BASE_URL = "https://www.plus.fifa.com"  # ✅ সঠিক URL
+BASE_URL = "https://www.plus.fifa.com"
 DEVICE_PROFILE = "MOBILE"
 DEVICE_STORE = "GOOGLE_PLAY"
 USER_COUNTRY = "BD"
@@ -36,11 +36,25 @@ def get_live_events():
     
     if resp.status_code == 200:
         data = resp.json()
-        events = data.get("results", []) if isinstance(data, dict) else data
+        print(f"📡 Response type: {type(data)}")
+        
+        # বিভিন্ন ফরম্যাট হ্যান্ডেল করা
+        if isinstance(data, list):
+            events = data
+        elif isinstance(data, dict):
+            if "results" in data:
+                events = data["results"]
+            elif "items" in data:
+                events = data["items"]
+            else:
+                events = []
+        else:
+            events = []
+        
         print(f"✅ Found {len(events)} events")
         return events
     else:
-        print(f"❌ Failed: {resp.text}")
+        print(f"❌ Failed: {resp.text[:200]}")
         return []
 
 def create_streaming_session(video_asset_id):
@@ -67,7 +81,7 @@ def create_streaming_session(video_asset_id):
         print(f"✅ Session created: {session_data['id'][:40]}...")
         return session_data["id"]
     else:
-        print(f"❌ Session failed: {resp.text}")
+        print(f"❌ Session failed: {resp.text[:100]}")
         return None
 
 def get_mpd_url(session_id):
@@ -82,7 +96,7 @@ def get_mpd_url(session_id):
     resp = requests.get(url, headers=headers, timeout=30)
     if resp.status_code == 200:
         streams = resp.json()
-        if streams:
+        if streams and isinstance(streams, list):
             return streams[0].get("url")
     return None
 
@@ -104,10 +118,17 @@ def main():
     
     for i, ev in enumerate(events[:10], 1):
         print(f"\n--- [{i}/{min(10, len(events))}] ---")
-        print(f"📺 {ev.get('title', 'Unknown')[:50]}...")
+        
+        # এখানে টাইপ চেক করা জরুরি
+        if isinstance(ev, str):
+            print(f"⚠️ Skipping string item: {ev[:50]}")
+            continue
+        
+        title = ev.get('title', 'Unknown') if isinstance(ev, dict) else str(ev)
+        print(f"📺 {title[:50]}...")
         
         # Get video asset id
-        video_id = ev.get("catalogRedirectId") or ev.get("id")
+        video_id = ev.get("catalogRedirectId") or ev.get("id") if isinstance(ev, dict) else None
         if not video_id:
             print("❌ No video ID found")
             continue
@@ -121,9 +142,9 @@ def main():
         if mpd_url:
             results.append({
                 "id": video_id,
-                "title": ev.get("title", ""),
+                "title": title,
                 "mpd_link": mpd_url,
-                "wideCoverUrl": ev.get("wideCoverUrl", "")
+                "wideCoverUrl": ev.get("wideCoverUrl", "") if isinstance(ev, dict) else ""
             })
             print(f"✅ MPD: {mpd_url[:60]}...")
         else:
